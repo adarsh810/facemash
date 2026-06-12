@@ -1,5 +1,5 @@
 import { createServerClient } from '@/lib/supabase-server'
-import { generateRoundMixes } from '@/lib/game-utils'
+import { generateRoundMixes, picsPerRound } from '@/lib/game-utils'
 import { Photo, Player } from '@/lib/types'
 
 export async function POST(
@@ -50,7 +50,8 @@ export async function POST(
     }
 
     // Generate round mix plans
-    const mixPlans = generateRoundMixes(players as Player[], photos as Photo[], game.rounds)
+    const pics = picsPerRound(players.length)
+    const mixPlans = generateRoundMixes(players as Player[], photos as Photo[], game.rounds, pics)
 
     if (mixPlans.length === 0) {
       return Response.json({ error: 'Could not generate round mixes' }, { status: 400 })

@@ -35,10 +35,17 @@ function getCombinations(arr: string[], k: number): string[][] {
   return result
 }
 
+export function picsPerRound(playerCount: number): number {
+  if (playerCount <= 3) return 3
+  if (playerCount <= 5) return 4
+  return 5
+}
+
 export function generateRoundMixes(
   players: Player[],
   photos: Photo[],
-  rounds: number
+  rounds: number,
+  picsCount: number
 ): RoundMixPlan[] {
   const playerIds = players.map((p) => p.id)
   const photosByPlayer: Record<string, Photo[]> = {}
@@ -51,7 +58,7 @@ export function generateRoundMixes(
   const usedCombinations = new Set<string>()
 
   for (let round = 1; round <= rounds; round++) {
-    const comboSize = round <= 2 ? 2 : 3
+    const comboSize = 2
     const validCombinations = getCombinations(playerIds, comboSize)
 
     // Shuffle for randomness
@@ -59,7 +66,7 @@ export function generateRoundMixes(
 
     let added = 0
     for (const combo of shuffled) {
-      if (added >= 5) break
+      if (added >= picsCount) break
 
       const key = [...combo].sort().join('|')
       if (usedCombinations.has(key)) continue
@@ -91,7 +98,7 @@ export function generateRoundMixes(
     if (added < 5) {
       const reshuffled = shuffle(validCombinations)
       for (const combo of reshuffled) {
-        if (added >= 5) break
+        if (added >= picsCount) break
 
         const allHavePhotos = combo.every(
           (pid) => photosByPlayer[pid] && photosByPlayer[pid].length > 0

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Game, Player, RoundMix, Guess } from '@/lib/types'
-import { generateChoices } from '@/lib/game-utils'
+import { generateChoices, picsPerRound } from '@/lib/game-utils'
 
 const CHOICE_LABELS = ['A', 'B', 'C', 'D']
 
@@ -447,7 +447,7 @@ export default function PlayPage() {
             Round {game.current_round} / {game.rounds}
           </div>
           <div className="flex gap-1.5">
-            {[0, 1, 2, 3, 4].map((i) => (
+            {Array.from({ length: picsPerRound(players.length || 2) }, (_, i) => i).map((i) => (
               <div
                 key={i}
                 className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
@@ -726,7 +726,7 @@ export default function PlayPage() {
                 >
                   {advancingRound
                     ? '⏳ Loading...'
-                    : game.current_pic_index < 4
+                    : game.current_pic_index < picsPerRound(players.length) - 1
                     ? 'Next Photo →'
                     : game.current_round < game.rounds
                     ? 'Round Results →'

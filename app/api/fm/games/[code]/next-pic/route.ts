@@ -1,4 +1,5 @@
 import { createServerClient } from '@/lib/supabase-server'
+import { picsPerRound } from '@/lib/game-utils'
 
 export async function POST(
   request: Request,
@@ -28,27 +29,21 @@ export async function POST(
       return Response.json({ error: 'Only the host can advance' }, { status: 403 })
     }
 
+    const { data: players } = await supabase
+      .from('fm_players')
+      .select('id')
+      .eq('game_id', game.id)
+
+    const pics = picsPerRound((players || []).length)
     const nextPicIndex = game.current_pic_index + 1
 
-    if (nextPicIndex < 5) {
-      // More pics in this round
+    if (nextPicIndex < pics) {
       await supabase
         .from('fm_games')
         .update({ current_pic_index: nextPicIndex })
         .eq('id', game.id)
-
-      // Trigger generation of next mix
-      const { data: nextMix } = await supabase
-        .from('fm_round_mixes')
-        .select('*')
-        .eq('game_id', game.id)
-        .eq('round_number', game.current_round)
-        .eq('pic_index', nextPicIndex)
-        .maybeSingle()
-
-      // Generation is triggered client-side by the play page
+      // Generation triggered client-side by play page
     } else {
-      // Round done
       if (game.current_round < game.rounds) {
         await supabase
           .from('fm_games')
