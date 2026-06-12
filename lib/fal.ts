@@ -14,22 +14,29 @@ export async function blendFaces(photoUrls: string[]): Promise<string> {
   if (photoUrls.length === 1) return photoUrls[0]
 
   try {
+    console.log('fal.ai: starting face-swap, photos:', photoUrls.map(u => u.slice(-40)))
     const result = await withTimeout(
       fal.subscribe('fal-ai/face-swap', {
         input: {
           base_image_url: photoUrls[1],
           swap_image_url: photoUrls[0],
         },
-      }) as Promise<{ image?: { url: string }; images?: Array<{ url: string }> }>,
-      38000,
+      }),
+      90000,
       null
     )
 
-    const url = result?.image?.url ?? result?.images?.[0]?.url
+    console.log('fal.ai raw result keys:', result ? Object.keys(result as object) : 'null (timeout)')
+
+    // @fal-ai/client v1 wraps output in .data; v0 returns it directly
+    const output = (result as any)?.data ?? result
+    const url = output?.image?.url ?? output?.images?.[0]?.url
+    console.log('fal.ai extracted URL:', url ?? 'none')
+
     if (url) return url
-    throw new Error('No image URL in response')
+    throw new Error(`No image URL — raw: ${JSON.stringify(result)?.slice(0, 300)}`)
   } catch (error) {
-    console.error('fal.ai face-swap error:', error)
+    console.error('fal.ai face-swap error:', error instanceof Error ? error.message : String(error))
     return photoUrls[0]
   }
 }

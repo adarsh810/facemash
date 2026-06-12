@@ -121,11 +121,52 @@ export function calculateScore(
   actualPlayerIds: string[],
   guessedPlayerIds: string[]
 ): number {
-  let score = 0
-  for (const id of guessedPlayerIds) {
-    if (actualPlayerIds.includes(id)) {
-      score++
-    }
+  if (actualPlayerIds.length !== guessedPlayerIds.length) return 0
+  const a = [...actualPlayerIds].sort()
+  const b = [...guessedPlayerIds].sort()
+  return a.every((id, i) => id === b[i]) ? 1 : 0
+}
+
+function deterministicShuffle<T>(arr: T[], seed: string): T[] {
+  const copy = [...arr]
+  let h = 0
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(31, h) + seed.charCodeAt(i) | 0
   }
-  return score
+  for (let i = copy.length - 1; i > 0; i--) {
+    h = Math.imul(h ^ (h >>> 16), 0x45d9f3b) | 0
+    h = Math.imul(h ^ (h >>> 16), 0x45d9f3b) | 0
+    h ^= h >>> 16
+    const j = Math.abs(h) % (i + 1)
+    ;[copy[i], copy[j]] = [copy[j], copy[i]]
+  }
+  return copy
+}
+
+export function generateChoices(
+  mixId: string,
+  mixPlayerIds: string[],
+  allPlayers: Player[]
+): { ids: string[]; label: string }[] {
+  const size = mixPlayerIds.length
+  const allPlayerIds = allPlayers.map(p => p.id)
+  const allCombos = getCombinations(allPlayerIds, size)
+  const correctKey = [...mixPlayerIds].sort().join('|')
+
+  const wrongCombos = allCombos.filter(
+    combo => [...combo].sort().join('|') !== correctKey
+  )
+
+  const shuffledWrong = deterministicShuffle(wrongCombos, mixId + 'w')
+  const wrongOptions = shuffledWrong.slice(0, 3)
+
+  const allOptions = deterministicShuffle(
+    [mixPlayerIds, ...wrongOptions],
+    mixId + 'o'
+  )
+
+  return allOptions.map(ids => ({
+    ids,
+    label: ids.map(id => allPlayers.find(p => p.id === id)?.name ?? '?').join(' + '),
+  }))
 }

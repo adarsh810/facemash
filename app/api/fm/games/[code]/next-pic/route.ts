@@ -1,37 +1,4 @@
 import { createServerClient } from '@/lib/supabase-server'
-import { blendFaces } from '@/lib/fal'
-import { Photo } from '@/lib/types'
-
-async function generateMixInBackground(
-  mixId: string,
-  photoIds: string[],
-  allPhotos: Photo[]
-) {
-  const supabase = createServerClient()
-  try {
-    await supabase
-      .from('fm_round_mixes')
-      .update({ status: 'generating' })
-      .eq('id', mixId)
-
-    const photoUrls = photoIds
-      .map((pid) => allPhotos.find((p) => p.id === pid)?.photo_url)
-      .filter(Boolean) as string[]
-
-    const mixedUrl = await blendFaces(photoUrls)
-
-    await supabase
-      .from('fm_round_mixes')
-      .update({ mixed_photo_url: mixedUrl, status: 'ready' })
-      .eq('id', mixId)
-  } catch (err) {
-    console.error('Background mix generation error:', err)
-    await supabase
-      .from('fm_round_mixes')
-      .update({ status: 'failed' })
-      .eq('id', mixId)
-  }
-}
 
 export async function POST(
   request: Request,
@@ -79,16 +46,7 @@ export async function POST(
         .eq('pic_index', nextPicIndex)
         .maybeSingle()
 
-      if (nextMix && nextMix.status === 'pending') {
-        const { data: photos } = await supabase
-          .from('fm_photos')
-          .select('*')
-          .eq('game_id', game.id)
-
-        generateMixInBackground(nextMix.id, nextMix.photo_ids, (photos || []) as Photo[]).catch(
-          console.error
-        )
-      }
+      // Generation is triggered client-side by the play page
     } else {
       // Round done
       if (game.current_round < game.rounds) {

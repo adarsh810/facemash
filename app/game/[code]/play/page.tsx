@@ -1,9 +1,12 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Game, Player, RoundMix, Guess } from '@/lib/types'
+import { generateChoices } from '@/lib/game-utils'
+
+const CHOICE_LABELS = ['A', 'B', 'C', 'D']
 
 export default function PlayPage() {
   const router = useRouter()
@@ -28,6 +31,12 @@ export default function PlayPage() {
   const [timerActive, setTimerActive] = useState(false)
 
   const generatingRef = useRef<string | null>(null)
+  const gameRef = useRef<Game | null>(null)
+
+  // Keep gameRef in sync with state so the realtime closure always has current game
+  useEffect(() => {
+    gameRef.current = game
+  }, [game])
 
   const triggerGeneration = useCallback(async (mixId: string) => {
     if (generatingRef.current === mixId) return
@@ -72,7 +81,6 @@ export default function PlayPage() {
     const playerData = (playerRaw || []) as Player[]
     setPlayers(playerData)
 
-    // Load current mix
     const { data: mixRaw } = await supabase
       .from('fm_round_mixes')
       .select('*')
@@ -85,7 +93,6 @@ export default function PlayPage() {
     if (mixData) {
       setCurrentMix(mixData)
 
-      // Load guesses for this mix
       const { data: guessRaw } = await supabase
         .from('fm_guesses')
         .select('*')
@@ -97,7 +104,6 @@ export default function PlayPage() {
       const myG = guessData.find((g) => g.player_id === pid)
       if (myG) setMyGuess(myG)
 
-      // Check if all players guessed
       if (playerData && guessData.length >= playerData.length) {
         setShowReveal(true)
         setTimerActive(false)
@@ -106,6 +112,7 @@ export default function PlayPage() {
     }
   }, [code, router])
 
+  // One-time init + stable subscription (game intentionally NOT in deps)
   useEffect(() => {
     const sid = localStorage.getItem('fm_session_id') || ''
     const pid = localStorage.getItem(`fm_player_id_${code}`) || ''
@@ -133,6 +140,7 @@ export default function PlayPage() {
             setGuesses([])
             setTimer(30)
             setTimerActive(false)
+            generatingRef.current = null
           }
           loadGame()
         }
@@ -142,10 +150,11 @@ export default function PlayPage() {
         { event: 'UPDATE', schema: 'public', table: 'fm_round_mixes' },
         (payload) => {
           const mix = payload.new as RoundMix
-          if (game && mix.game_id === game.id) {
+          const g = gameRef.current
+          if (g && mix.game_id === g.id) {
             if (
-              mix.round_number === game.current_round &&
-              mix.pic_index === game.current_pic_index
+              mix.round_number === g.current_round &&
+              mix.pic_index === g.current_pic_index
             ) {
               setCurrentMix(mix)
               if (mix.status === 'ready' && mix.mixed_photo_url) {
@@ -166,7 +175,7 @@ export default function PlayPage() {
       supabase.removeChannel(channel)
       if (timerRef.current) clearInterval(timerRef.current)
     }
-  }, [code, router, loadGame, game])
+  }, [code, router, loadGame]) // no 'game' — use gameRef.current inside
 
   // Trigger generation when mix is pending, failed, or stuck generating
   useEffect(() => {
@@ -176,7 +185,6 @@ export default function PlayPage() {
         currentMix.status === 'failed' ||
         currentMix.status === 'generating')
     ) {
-      // Reset dedup ref so generating mixes can be retried
       if (currentMix.status === 'generating') {
         generatingRef.current = null
       }
@@ -212,12 +220,12 @@ export default function PlayPage() {
     }
   }, [currentMix?.status, currentMix?.mixed_photo_url, myGuess])
 
-  // Load round scores
+  // Load round scores when entering round_results
   useEffect(() => {
     if (game?.status === 'round_results' && players.length > 0) {
       loadRoundScores()
     }
-  }, [game?.status])
+  }, [game?.status]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadRoundScores() {
     if (!game) return
@@ -243,11 +251,14 @@ export default function PlayPage() {
     setRoundScores(scores)
   }
 
-  function togglePlayer(pid: string) {
-    setSelectedIds((prev) =>
-      prev.includes(pid) ? prev.filter((id) => id !== pid) : [...prev, pid]
-    )
-  }
+  // 4 choices for the current mix — deterministic, same for all players
+  const choices = useMemo(
+    () =>
+      currentMix && players.length > 0
+        ? generateChoices(currentMix.id, currentMix.player_ids, players)
+        : [],
+    [currentMix?.id, currentMix?.player_ids, players] // eslint-disable-line react-hooks/exhaustive-deps
+  )
 
   async function submitGuess() {
     if (!currentMix || !playerId || selectedIds.length === 0) return
@@ -307,8 +318,30 @@ export default function PlayPage() {
     }
   }
 
+  async function handleEndGame() {
+    if (!confirm('End the game for everyone and go to results?')) return
+    await fetch(`/api/fm/games/${code}/end`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    })
+  }
+
   function getPlayerName(pid: string) {
     return players.find((p) => p.id === pid)?.name || 'Unknown'
+  }
+
+  function isChoiceSelected(choiceIds: string[]) {
+    const a = [...selectedIds].sort().join('|')
+    const b = [...choiceIds].sort().join('|')
+    return a === b
+  }
+
+  function isChoiceCorrect(choiceIds: string[]) {
+    if (!currentMix) return false
+    const a = [...currentMix.player_ids].sort().join('|')
+    const b = [...choiceIds].sort().join('|')
+    return a === b
   }
 
   // Round results screen
@@ -353,17 +386,26 @@ export default function PlayPage() {
           </div>
 
           {isHost && (
-            <button
-              onClick={handleNextRound}
-              disabled={advancingRound}
-              className="w-full py-5 rounded-2xl text-xl font-bold transition-all active:scale-95 disabled:opacity-50"
-              style={{
-                background: 'linear-gradient(135deg, #FF2D6B, #FF6B35)',
-                boxShadow: '0 0 30px rgba(255,45,107,0.3)',
-              }}
-            >
-              {advancingRound ? '⏳ Loading...' : `Start Round ${game.current_round + 1} →`}
-            </button>
+            <div className="space-y-3">
+              <button
+                onClick={handleNextRound}
+                disabled={advancingRound}
+                className="w-full py-5 rounded-2xl text-xl font-bold transition-all active:scale-95 disabled:opacity-50"
+                style={{
+                  background: 'linear-gradient(135deg, #FF2D6B, #FF6B35)',
+                  boxShadow: '0 0 30px rgba(255,45,107,0.3)',
+                }}
+              >
+                {advancingRound ? '⏳ Loading...' : `Start Round ${game.current_round + 1} →`}
+              </button>
+              <button
+                onClick={handleEndGame}
+                className="w-full py-3 rounded-2xl text-sm font-semibold transition-all active:scale-95"
+                style={{ background: '#1E1E1E', border: '1px solid #3A3A3A', color: '#A0A0A0' }}
+              >
+                End Game
+              </button>
+            </div>
           )}
 
           {!isHost && (
@@ -396,7 +438,7 @@ export default function PlayPage() {
   return (
     <main className="min-h-screen flex flex-col items-center p-4 pt-6 pb-24">
       <div className="w-full max-w-md space-y-4">
-        {/* Round/pic indicator */}
+        {/* Round/pic indicator + host end game */}
         <div className="flex items-center justify-between">
           <div
             className="px-3 py-1.5 rounded-full text-sm font-bold"
@@ -429,12 +471,22 @@ export default function PlayPage() {
               </div>
             ))}
           </div>
-          <div
-            className="px-3 py-1.5 rounded-full text-sm font-bold"
-            style={{ background: '#1E1E1E', color: '#A0A0A0' }}
-          >
-            Photo {game.current_pic_index + 1}/5
-          </div>
+          {isHost ? (
+            <button
+              onClick={handleEndGame}
+              className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all active:scale-95"
+              style={{ background: '#1E1E1E', border: '1px solid #3A3A3A', color: '#666' }}
+            >
+              End
+            </button>
+          ) : (
+            <div
+              className="px-3 py-1.5 rounded-full text-sm font-bold"
+              style={{ background: '#1E1E1E', color: '#A0A0A0' }}
+            >
+              {game.current_pic_index + 1}/5
+            </div>
+          )}
         </div>
 
         {/* Mixed photo */}
@@ -456,7 +508,7 @@ export default function PlayPage() {
             <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6">
               <div className="text-4xl">😵</div>
               <p style={{ color: '#A0A0A0' }} className="text-sm text-center">
-                AI blending failed — showing original
+                AI blending failed
               </p>
             </div>
           ) : (
@@ -499,31 +551,33 @@ export default function PlayPage() {
           </div>
         )}
 
-        {/* Guess panel */}
+        {/* 4-choice guess panel */}
         {!shouldReveal && currentMix.status === 'ready' && !myGuess && (
           <div
             className="rounded-2xl p-4 space-y-3"
             style={{ background: '#141414', border: '1px solid #2A2A2A' }}
           >
             <p className="font-bold text-center">🤔 Who&apos;s in this photo?</p>
-            <p style={{ color: '#A0A0A0' }} className="text-sm text-center">
-              Select {currentMix.player_ids.length} people
-            </p>
-            <div className="flex flex-wrap gap-2 justify-center">
-              {players.map((player) => {
-                const sel = selectedIds.includes(player.id)
+            <div className="space-y-2">
+              {choices.map((choice, i) => {
+                const sel = isChoiceSelected(choice.ids)
                 return (
                   <button
-                    key={player.id}
-                    onClick={() => togglePlayer(player.id)}
-                    className="px-4 py-2 rounded-full font-semibold text-sm transition-all active:scale-95"
+                    key={i}
+                    onClick={() => setSelectedIds(choice.ids)}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-left transition-all active:scale-[0.98]"
                     style={{
-                      background: sel ? '#FF2D6B' : '#1E1E1E',
+                      background: sel ? 'rgba(255,45,107,0.15)' : '#1E1E1E',
                       border: `2px solid ${sel ? '#FF2D6B' : '#2A2A2A'}`,
-                      boxShadow: sel ? '0 0 12px rgba(255,45,107,0.3)' : 'none',
                     }}
                   >
-                    {player.name}
+                    <span
+                      className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0"
+                      style={{ background: sel ? '#FF2D6B' : '#2A2A2A' }}
+                    >
+                      {CHOICE_LABELS[i]}
+                    </span>
+                    <span>{choice.label}</span>
                   </button>
                 )
               })}
@@ -542,8 +596,8 @@ export default function PlayPage() {
               {submitting
                 ? '⏳ Submitting...'
                 : selectedIds.length === 0
-                ? 'Select players first'
-                : `Submit Guess (${selectedIds.length} selected)`}
+                ? 'Pick an option first'
+                : 'Lock In Answer'}
             </button>
           </div>
         )}
@@ -555,10 +609,10 @@ export default function PlayPage() {
             style={{ background: '#141414', border: '1px solid #2A2A2A' }}
           >
             <p className="font-bold">
-              ✅ Guess submitted! +{myGuess.score} pts
+              {myGuess.score > 0 ? '✅' : '❌'} Locked in!
             </p>
             <p style={{ color: '#A0A0A0' }} className="text-sm">
-              Your guess: {myGuess.guessed_player_ids.map(getPlayerName).join(', ')}
+              Your answer: {myGuess.guessed_player_ids.map(getPlayerName).join(' + ')}
             </p>
             <div className="flex items-center justify-center gap-2 pt-1">
               <div className="w-2 h-2 rounded-full bg-[#7B2FFF] animate-pulse" />
@@ -592,6 +646,42 @@ export default function PlayPage() {
               </div>
             </div>
 
+            {/* Show choices with correct/wrong highlighting */}
+            {choices.length > 0 && (
+              <div className="space-y-1.5">
+                <p style={{ color: '#A0A0A0' }} className="text-xs">The options were:</p>
+                {choices.map((choice, i) => {
+                  const correct = isChoiceCorrect(choice.ids)
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm"
+                      style={{
+                        background: correct
+                          ? 'rgba(34,197,94,0.12)'
+                          : 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${correct ? '#22c55e' : '#2A2A2A'}`,
+                      }}
+                    >
+                      <span
+                        className="w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0"
+                        style={{
+                          background: correct ? '#22c55e' : '#2A2A2A',
+                          color: correct ? '#000' : '#666',
+                        }}
+                      >
+                        {CHOICE_LABELS[i]}
+                      </span>
+                      <span style={{ color: correct ? '#22c55e' : '#A0A0A0' }}>
+                        {choice.label}
+                      </span>
+                      {correct && <span className="ml-auto text-xs font-bold" style={{ color: '#22c55e' }}>✓ correct</span>}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
             {/* Per-player scores */}
             <div className="space-y-1.5">
               <p style={{ color: '#A0A0A0' }} className="text-xs">Scores this photo:</p>
@@ -609,13 +699,13 @@ export default function PlayPage() {
                     {g ? (
                       <>
                         <span style={{ color: '#A0A0A0' }} className="text-xs">
-                          guessed: {g.guessed_player_ids.map(getPlayerName).join(', ')}
+                          {g.guessed_player_ids.map(getPlayerName).join(' + ')}
                         </span>
                         <span
                           className="font-bold text-sm ml-2"
-                          style={{ color: g.score > 0 ? '#22c55e' : '#A0A0A0' }}
+                          style={{ color: g.score > 0 ? '#22c55e' : '#666' }}
                         >
-                          +{g.score}
+                          {g.score > 0 ? '+1 ✓' : '0'}
                         </span>
                       </>
                     ) : (
@@ -627,20 +717,29 @@ export default function PlayPage() {
             </div>
 
             {isHost && (
-              <button
-                onClick={handleNextPic}
-                disabled={advancingRound}
-                className="w-full py-3 rounded-xl font-bold transition-all active:scale-95 disabled:opacity-50 mt-2"
-                style={{ background: 'linear-gradient(135deg, #FF2D6B, #FF6B35)' }}
-              >
-                {advancingRound
-                  ? '⏳ Loading...'
-                  : game.current_pic_index < 4
-                  ? 'Next Photo →'
-                  : game.current_round < game.rounds
-                  ? 'Round Results →'
-                  : 'See Final Results →'}
-              </button>
+              <div className="space-y-2 mt-2">
+                <button
+                  onClick={handleNextPic}
+                  disabled={advancingRound}
+                  className="w-full py-3 rounded-xl font-bold transition-all active:scale-95 disabled:opacity-50"
+                  style={{ background: 'linear-gradient(135deg, #FF2D6B, #FF6B35)' }}
+                >
+                  {advancingRound
+                    ? '⏳ Loading...'
+                    : game.current_pic_index < 4
+                    ? 'Next Photo →'
+                    : game.current_round < game.rounds
+                    ? 'Round Results →'
+                    : 'See Final Results →'}
+                </button>
+                <button
+                  onClick={handleEndGame}
+                  className="w-full py-2 rounded-xl text-sm font-semibold transition-all active:scale-95"
+                  style={{ background: '#1E1E1E', border: '1px solid #3A3A3A', color: '#666' }}
+                >
+                  End Game
+                </button>
+              </div>
             )}
 
             {!isHost && (
