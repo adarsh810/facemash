@@ -16,6 +16,7 @@ export default function LobbyPage() {
   const [copied, setCopied] = useState(false)
   const [sessionId, setSessionId] = useState('')
   const [myPlayerId, setMyPlayerId] = useState('')
+  const [gameId, setGameId] = useState('')
 
   const loadPlayers = useCallback(async () => {
     const { data: gameRaw } = await supabase
@@ -31,6 +32,8 @@ export default function LobbyPage() {
       router.push(`/game/${code}/upload`)
       return
     }
+
+    setGameId(game.id)
 
     const { data: playerData } = await supabase
       .from('fm_players')
@@ -52,18 +55,22 @@ export default function LobbyPage() {
     setMyPlayerId(pid)
 
     loadPlayers()
+  }, [code, loadPlayers])
 
-    // Subscribe to player changes
+  // Set up realtime once we have the gameId
+  useEffect(() => {
+    if (!gameId) return
+
     const channel = supabase
-      .channel(`lobby-${code}`)
+      .channel(`lobby-${code}-${gameId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'fm_players' },
+        { event: '*', schema: 'public', table: 'fm_players', filter: `game_id=eq.${gameId}` },
         () => { loadPlayers() }
       )
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'fm_games', filter: `code=eq.${code}` },
+        { event: 'UPDATE', schema: 'public', table: 'fm_games', filter: `id=eq.${gameId}` },
         (payload) => {
           const game = payload.new as { status: string }
           if (game.status === 'uploading') {
@@ -73,10 +80,8 @@ export default function LobbyPage() {
       )
       .subscribe()
 
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [code, router, loadPlayers])
+    return () => { supabase.removeChannel(channel) }
+  }, [gameId, code, router, loadPlayers])
 
   async function handleStart() {
     setLoading(true)
@@ -88,7 +93,12 @@ export default function LobbyPage() {
       })
       if (!res.ok) {
         const d = await res.json()
-        alert(d.error || 'Failed to start')
+        // Already started — just follow the redirect
+        if (d.error === 'Game is not in lobby state') {
+          router.push(`/game/${code}/upload`)
+        } else {
+          alert(d.error || 'Failed to start')
+        }
       }
     } finally {
       setLoading(false)
