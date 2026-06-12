@@ -56,11 +56,36 @@ export async function POST(
 
   try {
     const mixedUrl = await blendFaces(photoUrls)
+
+    // Persist blend in our storage so fal.ai CDN expiry doesn't break it
+    let finalUrl = mixedUrl
+    const isExternal = !mixedUrl.includes('.supabase.co/')
+    if (isExternal) {
+      try {
+        const imgResp = await fetch(mixedUrl)
+        if (imgResp.ok) {
+          const buf = Buffer.from(await imgResp.arrayBuffer())
+          const storagePath = `blends/${code.toUpperCase()}/${mixId}.jpg`
+          const { error: upErr } = await supabase.storage
+            .from('facemash-photos')
+            .upload(storagePath, buf, { contentType: 'image/jpeg', upsert: true })
+          if (!upErr) {
+            const { data: urlData } = supabase.storage
+              .from('facemash-photos')
+              .getPublicUrl(storagePath)
+            finalUrl = urlData.publicUrl
+          }
+        }
+      } catch (e) {
+        console.error('Failed to persist blend to storage:', e)
+      }
+    }
+
     await supabase
       .from('fm_round_mixes')
-      .update({ mixed_photo_url: mixedUrl, status: 'ready' })
+      .update({ mixed_photo_url: finalUrl, status: 'ready' })
       .eq('id', mixId)
-    return Response.json({ success: true, url: mixedUrl })
+    return Response.json({ success: true, url: finalUrl })
   } catch (error) {
     console.error(`generate-mix [${code}] failed:`, error)
     await supabase

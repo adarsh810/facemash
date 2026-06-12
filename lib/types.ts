@@ -41,6 +41,14 @@ export interface RoundMix {
   photo_ids: string[]
   mixed_photo_url: string | null
   status: RoundMixStatus
+  likes_count: number
+  created_at: string
+}
+
+export interface BlendLike {
+  id: string
+  mix_id: string
+  session_id: string
   created_at: string
 }
 
