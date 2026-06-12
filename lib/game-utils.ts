@@ -94,11 +94,11 @@ export function generateRoundMixes(
       added++
     }
 
-    // If we couldn't fill 5 slots with unique combos, reuse combos
-    if (added < 5) {
+    // Fill remaining slots by cycling through combos (handles small player counts)
+    if (added < picsCount) {
       const reshuffled = shuffle(validCombinations)
-      for (const combo of reshuffled) {
-        if (added >= picsCount) break
+      for (let attempt = 0; added < picsCount && attempt < picsCount * 10; attempt++) {
+        const combo = reshuffled[attempt % reshuffled.length]
 
         const allHavePhotos = combo.every(
           (pid) => photosByPlayer[pid] && photosByPlayer[pid].length > 0
