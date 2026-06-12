@@ -41,6 +41,7 @@ export default function HomePage() {
 
   const [playedCodes, setPlayedCodes] = useState<string[]>([])
   const [clearingPhotos, setClearingPhotos] = useState(false)
+  const [clearingBlends, setClearingBlends] = useState(false)
 
   useEffect(() => {
     const saved = localStorage.getItem('fm_game_code')
@@ -115,7 +116,26 @@ export default function HomePage() {
     }
   }
 
-async function handleClearPhotos() {
+  async function handleClearBlends() {
+    if (
+      !confirm(
+        'Delete all blended images from past games? This cannot be undone.'
+      )
+    )
+      return
+    setClearingBlends(true)
+    try {
+      await fetch('/api/fm/clear-blends', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gameCodes: playedCodes }),
+      })
+    } finally {
+      setClearingBlends(false)
+    }
+  }
+
+  async function handleClearPhotos() {
     if (
       !confirm(
         'Delete all input photos from past games? Blended images will be kept. This cannot be undone.'
@@ -321,9 +341,8 @@ async function handleClearPhotos() {
           </div>
         )}
 
-        {/* Clear input images */}
         {mode === 'home' && playedCodes.length > 0 && (
-          <div className="mt-6 flex justify-center">
+          <div className="mt-6 flex justify-center gap-3">
             <button
               onClick={handleClearPhotos}
               disabled={clearingPhotos}
@@ -331,6 +350,14 @@ async function handleClearPhotos() {
               style={{ background: '#141414', border: '1px solid #2A2A2A', color: '#555' }}
             >
               {clearingPhotos ? 'Clearing...' : 'Clear Input Images'}
+            </button>
+            <button
+              onClick={handleClearBlends}
+              disabled={clearingBlends}
+              className="text-xs px-4 py-2 rounded-full font-semibold transition-all active:scale-95 disabled:opacity-50"
+              style={{ background: '#141414', border: '1px solid #2A2A2A', color: '#555' }}
+            >
+              {clearingBlends ? 'Clearing...' : 'Clear Blended Images'}
             </button>
           </div>
         )}
