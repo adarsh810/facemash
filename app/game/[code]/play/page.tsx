@@ -27,6 +27,22 @@ export default function PlayPage() {
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const [timerActive, setTimerActive] = useState(false)
 
+  const generatingRef = useRef<string | null>(null)
+
+  const triggerGeneration = useCallback(async (mixId: string) => {
+    if (generatingRef.current === mixId) return
+    generatingRef.current = mixId
+    try {
+      await fetch(`/api/fm/games/${code}/generate-mix`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mixId }),
+      })
+    } catch (e) {
+      console.error('generate-mix call failed', e)
+    }
+  }, [code])
+
   const loadGame = useCallback(async () => {
     const { data: gameRaw } = await supabase
       .from('fm_games')
@@ -151,6 +167,13 @@ export default function PlayPage() {
       if (timerRef.current) clearInterval(timerRef.current)
     }
   }, [code, router, loadGame, game])
+
+  // Trigger generation when mix is pending
+  useEffect(() => {
+    if (currentMix && (currentMix.status === 'pending' || currentMix.status === 'failed')) {
+      triggerGeneration(currentMix.id)
+    }
+  }, [currentMix?.id, currentMix?.status, triggerGeneration])
 
   // Timer effect
   useEffect(() => {
