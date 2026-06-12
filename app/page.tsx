@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { v4 as uuidv4 } from 'uuid'
 import { useTheme } from '@/components/ThemeProvider'
@@ -44,6 +44,30 @@ export default function HomePage() {
   const [clearingPhotos, setClearingPhotos] = useState(false)
   const [clearingBlends, setClearingBlends] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(false)
+  const gearRef = useRef<HTMLButtonElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    setIsDesktop(mq.matches)
+    const h = (e: MediaQueryListEvent) => setIsDesktop(e.matches)
+    mq.addEventListener('change', h)
+    return () => mq.removeEventListener('change', h)
+  }, [])
+
+  useEffect(() => {
+    if (!settingsOpen || !isDesktop) return
+    function handleOutside(e: MouseEvent) {
+      if (
+        dropdownRef.current?.contains(e.target as Node) ||
+        gearRef.current?.contains(e.target as Node)
+      ) return
+      setSettingsOpen(false)
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [settingsOpen, isDesktop])
 
   useEffect(() => {
     const saved = localStorage.getItem('fm_game_code')
@@ -161,9 +185,10 @@ export default function HomePage() {
         {/* Settings gear — top right, home screen only */}
         {mode === 'home' && (
           <button
-            onClick={() => setSettingsOpen(true)}
+            ref={gearRef}
+            onClick={() => setSettingsOpen((v) => !v)}
             className="absolute top-0 right-0 p-2 rounded-full transition-all active:scale-95"
-            style={{ color: 'var(--muted)' }}
+            style={{ color: settingsOpen ? 'var(--foreground)' : 'var(--muted)' }}
             aria-label="Settings"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -171,6 +196,73 @@ export default function HomePage() {
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
           </button>
+        )}
+
+        {/* Desktop settings dropdown */}
+        {mode === 'home' && settingsOpen && isDesktop && (
+          <div
+            ref={dropdownRef}
+            className="absolute top-9 right-0 z-50 w-72 rounded-2xl p-5 animate-fade-in"
+            style={{
+              background: 'var(--card)',
+              border: '1px solid var(--border)',
+              boxShadow: theme === 'dark'
+                ? '0 8px 40px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3)'
+                : '0 8px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)',
+            }}
+          >
+            <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--muted)' }}>
+              Appearance
+            </p>
+            <div
+              className="flex items-center justify-between p-3 rounded-xl mb-4"
+              style={{ background: 'var(--input-bg)', border: '1px solid var(--border)' }}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-base">{theme === 'dark' ? '🌙' : '☀️'}</span>
+                <span className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>
+                  {theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
+                </span>
+              </div>
+              <button
+                onClick={toggle}
+                className="relative w-10 h-5 rounded-full transition-colors duration-300 focus:outline-none flex-shrink-0"
+                style={{ background: theme === 'light' ? '#FF2D6B' : '#3A3A3A' }}
+                aria-label="Toggle theme"
+              >
+                <span
+                  className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all duration-300"
+                  style={{ left: theme === 'light' ? '22px' : '2px' }}
+                />
+              </button>
+            </div>
+
+            {playedCodes.length > 0 && (
+              <>
+                <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--muted)' }}>
+                  Data
+                </p>
+                <div className="space-y-1.5">
+                  <button
+                    onClick={handleClearPhotos}
+                    disabled={clearingPhotos}
+                    className="w-full px-3 py-2.5 rounded-xl text-left text-sm font-medium transition-all active:scale-95 disabled:opacity-50"
+                    style={{ background: 'var(--input-bg)', border: '1px solid var(--border)', color: 'var(--foreground)' }}
+                  >
+                    {clearingPhotos ? '⏳ Clearing...' : '🗑️ Clear Input Images'}
+                  </button>
+                  <button
+                    onClick={handleClearBlends}
+                    disabled={clearingBlends}
+                    className="w-full px-3 py-2.5 rounded-xl text-left text-sm font-medium transition-all active:scale-95 disabled:opacity-50"
+                    style={{ background: 'var(--input-bg)', border: '1px solid var(--border)', color: 'var(--foreground)' }}
+                  >
+                    {clearingBlends ? '⏳ Clearing...' : '🗑️ Clear Blended Images'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         )}
 
         {/* Logo */}
@@ -371,8 +463,8 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Settings bottom sheet */}
-      {settingsOpen && (
+      {/* Settings bottom sheet — mobile only */}
+      {settingsOpen && !isDesktop && (
         <div
           className="fixed inset-0 z-50 flex items-end"
           onClick={() => setSettingsOpen(false)}
