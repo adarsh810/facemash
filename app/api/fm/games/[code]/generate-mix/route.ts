@@ -23,7 +23,16 @@ export async function POST(
 
   const mix = mixRaw as { id: string; status: string; photo_ids: string[]; game_id: string } | null
   if (!mix) return Response.json({ error: 'Mix not found' }, { status: 404 })
-  if (mix.status !== 'pending') return Response.json({ status: mix.status })
+  if (mix.status === 'ready') return Response.json({ status: 'ready' })
+
+  // Reset stuck 'generating' mixes so they can be retried
+  if (mix.status === 'generating') {
+    await supabase
+      .from('fm_round_mixes')
+      .update({ status: 'pending' })
+      .eq('id', mixId)
+      .eq('status', 'generating')
+  }
 
   // Mark generating (atomic guard against double-calls)
   const { error: guardErr } = await supabase

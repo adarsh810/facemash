@@ -168,9 +168,18 @@ export default function PlayPage() {
     }
   }, [code, router, loadGame, game])
 
-  // Trigger generation when mix is pending
+  // Trigger generation when mix is pending, failed, or stuck generating
   useEffect(() => {
-    if (currentMix && (currentMix.status === 'pending' || currentMix.status === 'failed')) {
+    if (
+      currentMix &&
+      (currentMix.status === 'pending' ||
+        currentMix.status === 'failed' ||
+        currentMix.status === 'generating')
+    ) {
+      // Reset dedup ref so generating mixes can be retried
+      if (currentMix.status === 'generating') {
+        generatingRef.current = null
+      }
       triggerGeneration(currentMix.id)
     }
   }, [currentMix?.id, currentMix?.status, triggerGeneration])
