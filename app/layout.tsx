@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import PWARegister from '@/components/PWARegister'
+import { Analytics } from '@vercel/analytics/next'
 
 export const metadata: Metadata = {
   title: 'Facemash 🎭',
@@ -30,6 +31,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-[#0A0A0A] text-white">
         <PWARegister />
         {children}
+        <Analytics />
       </body>
     </html>
   )
