@@ -182,28 +182,14 @@ export default function HomePage() {
       />
 
       <div className="relative z-10 w-full max-w-md">
-        {/* Settings gear — top right, home screen only */}
-        {mode === 'home' && (
-          <button
-            ref={gearRef}
-            onClick={() => setSettingsOpen((v) => !v)}
-            className="absolute top-0 right-0 p-2 rounded-full transition-all active:scale-95"
-            style={{ color: settingsOpen ? 'var(--foreground)' : 'var(--muted)' }}
-            aria-label="Settings"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </button>
-        )}
-
-        {/* Desktop settings dropdown */}
+        {/* Desktop settings dropdown — fixed, opens above FAB */}
         {mode === 'home' && settingsOpen && isDesktop && (
           <div
             ref={dropdownRef}
-            className="absolute top-9 right-0 z-50 w-72 rounded-2xl p-5 animate-fade-in"
+            className="fixed z-50 w-72 rounded-2xl p-5 animate-fade-in"
             style={{
+              bottom: '80px',
+              right: '24px',
               background: 'var(--card)',
               border: '1px solid var(--border)',
               boxShadow: theme === 'dark'
@@ -462,6 +448,29 @@ export default function HomePage() {
           </div>
         )}
       </div>
+
+      {/* Settings FAB — fixed bottom-right, home screen only */}
+      {mode === 'home' && (
+        <button
+          ref={gearRef}
+          onClick={() => setSettingsOpen((v) => !v)}
+          className="fixed bottom-6 right-6 z-40 p-3 rounded-2xl transition-all active:scale-95"
+          style={{
+            background: 'var(--card)',
+            border: '1px solid var(--border)',
+            color: settingsOpen ? 'var(--foreground)' : 'var(--muted)',
+            boxShadow: theme === 'dark'
+              ? '0 4px 20px rgba(0,0,0,0.4)'
+              : '0 4px 20px rgba(0,0,0,0.1)',
+          }}
+          aria-label="Settings"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        </button>
+      )}
 
       {/* Settings bottom sheet — mobile only */}
       {settingsOpen && !isDesktop && (
