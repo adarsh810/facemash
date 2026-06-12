@@ -189,7 +189,7 @@ export default function HomePage() {
             className="fixed z-50 w-72 rounded-2xl p-5 animate-fade-in"
             style={{
               bottom: '80px',
-              right: '24px',
+              left: '24px',
               background: 'var(--card)',
               border: '1px solid var(--border)',
               boxShadow: theme === 'dark'
@@ -454,7 +454,7 @@ export default function HomePage() {
         <button
           ref={gearRef}
           onClick={() => setSettingsOpen((v) => !v)}
-          className="fixed bottom-6 right-6 z-40 p-3 rounded-2xl transition-all active:scale-95"
+          className="fixed bottom-6 left-6 z-40 p-3 rounded-2xl transition-all active:scale-95"
           style={{
             background: 'var(--card)',
             border: '1px solid var(--border)',
