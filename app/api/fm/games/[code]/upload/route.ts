@@ -30,24 +30,16 @@ export async function POST(
       return Response.json({ error: 'Game not found' }, { status: 404 })
     }
 
-    // Ensure bucket exists
-    const { data: buckets } = await supabase.storage.listBuckets()
-    const bucketExists = buckets?.some((b) => b.name === 'facemash-photos')
-    if (!bucketExists) {
-      await supabase.storage.createBucket('facemash-photos', { public: true })
-    }
-
     // Upload to storage
     const arrayBuffer = await photo.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
-    const filePath = `${code.toUpperCase()}/${playerId}/${photoIndex}.jpg`
+    const ext = photo.type === 'image/png' ? 'png' : photo.type === 'image/webp' ? 'webp' : 'jpg'
+    const contentType = photo.type || 'image/jpeg'
+    const filePath = `${code.toUpperCase()}/${playerId}/${photoIndex}.${ext}`
 
     const { error: uploadError } = await supabase.storage
       .from('facemash-photos')
-      .upload(filePath, buffer, {
-        contentType: 'image/jpeg',
-        upsert: true,
-      })
+      .upload(filePath, buffer, { contentType, upsert: true })
 
     if (uploadError) {
       console.error('Storage upload error:', uploadError)
