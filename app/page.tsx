@@ -61,7 +61,10 @@ export default function HomePage() {
 
   useEffect(() => {
     const saved = localStorage.getItem('fm_game_code')
-    if (saved) setJoinCode(saved)
+    if (saved) {
+      setJoinCode(saved)
+      trackPlayedGame(saved) // seed fm_played_games from legacy key
+    }
     const codes = getPlayedCodes()
     setPlayedCodes(codes)
   }, [])
